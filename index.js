@@ -3,16 +3,24 @@ import mongoose from "mongoose";
 import multer from "multer";
 import dotenv from "dotenv";
 import cors from "cors";
-import path from "path";
 import fs from "fs";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import path from "path";
+import { fileURLToPath } from "url";
+
+
 
 
 dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json()); // parse JSON for PATCH requests
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Make sure uploads folder exists
 const uploadFolder = "uploads";
