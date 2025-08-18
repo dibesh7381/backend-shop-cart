@@ -9,13 +9,10 @@ import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
 
-
-
-
 dotenv.config();
 const app = express();
 app.use(cors());
-app.use(express.json()); // parse JSON for PATCH requests
+app.use(express.json());
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -138,6 +135,7 @@ const authMiddleware = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded; // contains userId
+    console.log("Decoded JWT:", decoded);   // 👈 ye add karo
     next();
   } catch (err) {
     return res.status(401).json({ message: "Token is not valid" });
@@ -175,6 +173,12 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
     res.status(500).json({ message: "Error uploading product" });
   }
 });
+
+// Seller-only route
+app.get("/seller-dashboard", authMiddleware, isSeller, (req, res) => {
+  res.json({ message: `Welcome Seller ${req.user.userId}, this is your dashboard!` });
+});
+
 
 // Get all products
 app.get("/products", async (req, res) => {
