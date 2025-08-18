@@ -153,7 +153,7 @@ function isSeller(req, res, next) {
 }
 
 // Upload product
-app.post("/products", isSeller, authMiddleware, upload.single("file"), async (req, res) => {
+app.post("/products", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file received" });
     if (!req.file.mimetype.startsWith("image/")) return res.status(400).json({ message: "Only images are allowed" });
