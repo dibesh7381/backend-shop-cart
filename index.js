@@ -17,14 +17,12 @@ app.use(express.json());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
+// Serve uploads folder
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// Make sure uploads folder exists
 const uploadFolder = "uploads";
 if (!fs.existsSync(uploadFolder)) fs.mkdirSync(uploadFolder);
 
-// ----------------- MongoDB Model -----------------
+// ----------------- MongoDB Models -----------------
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   details: { type: String, required: true },
@@ -36,50 +34,56 @@ const productSchema = new mongoose.Schema({
 
 const Product = mongoose.model("Product", productSchema);
 
-// ----------------- Multer Setup -----------------
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadFolder);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ storage: storage });
-
-// ----------------- User Model -----------------
 const memberSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true }, // hashed password
-  role : { type: String, default: "customer" }
+  password: { type: String, required: true },
+  role: { type: String, default: "customer" }
 }, { collection: "members", versionKey: false });
 
 const Member = mongoose.model("Member", memberSchema);
 
+// ----------------- Multer Setup -----------------
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadFolder),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage });
+
+// ----------------- Auth Middleware -----------------
+const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // contains userId & role
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Token is not valid" });
+  }
+};
+
+// ----------------- Role Middleware -----------------
+const isSeller = (req, res, next) => {
+  if (req.user?.role === "seller") return next();
+  return res.status(403).json({ message: "Access denied, only sellers allowed" });
+};
 
 // ----------------- Signup -----------------
 app.post("/signup", async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;  // role bhi accept karenge
-    if (!name || !email || !password)
-      return res.status(400).json({ message: "All fields are required" });
+    const { name, email, password, role } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ message: "All fields are required" });
 
     const existingMember = await Member.findOne({ email });
-    if (existingMember)
-      return res.status(400).json({ message: "User already exists" });
+    if (existingMember) return res.status(400).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newMember = new Member({ 
-      name, 
-      email, 
-      password: hashedPassword, 
-      role: role || "customer"  // agar nahi bheja toh default customer
-    });
-
+    const newMember = new Member({ name, email, password: hashedPassword, role: role || "customer" });
     await newMember.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -93,8 +97,7 @@ app.post("/signup", async (req, res) => {
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password)
-      return res.status(400).json({ message: "All fields are required" });
+    if (!email || !password) return res.status(400).json({ message: "All fields are required" });
 
     const member = await Member.findOne({ email });
     if (!member) return res.status(400).json({ message: "Invalid credentials" });
@@ -102,21 +105,11 @@ app.post("/login", async (req, res) => {
     const isMatch = await bcrypt.compare(password, member.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    // ✅ role include in token
-    const token = jwt.sign(
-      { userId: member._id, role: member.role }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: "7d" }
-    );
+    const token = jwt.sign({ userId: member._id, role: member.role, name: member.name }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
     res.json({
       token,
-      user: { 
-        id: member._id, 
-        name: member.name, 
-        email: member.email, 
-        role: member.role 
-      },
+      user: { id: member._id, name: member.name, email: member.email, role: member.role }
     });
   } catch (err) {
     console.error(err);
@@ -124,33 +117,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ----------------- Serve uploads folder -----------------
-app.use("/uploads", express.static(uploadFolder));
-
-// ----------------- Auth Middleware -----------------
-const authMiddleware = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // contains userId
-    console.log("Decoded JWT:", decoded);   // 👈 ye add karo
-    next();
-  } catch (err) {
-    return res.status(401).json({ message: "Token is not valid" });
-  }
-};
-
-// seller middleware : -
-function isSeller(req, res, next) {
-  if (req.user?.role === "seller") {
-    return next();
-  }
-  return res.status(403).json({ message: "Access denied, only sellers allowed" });
-}
-
-// Upload product
+// ----------------- Product Routes (Seller only) -----------------
 app.post("/products", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file received" });
@@ -162,7 +129,7 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
       details,
       quantity: Number(quantity),
       category,
-      price: Number(price),         
+      price: Number(price),
       imageUrl: `/uploads/${req.file.filename}`
     });
 
@@ -174,38 +141,10 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
   }
 });
 
-// Seller-only route
-app.get("/seller-dashboard", authMiddleware, isSeller, (req, res) => {
-  res.json({ message: `Welcome Seller ${req.user.name}, this is your dashboard!` });
-});
-
-app.get("/seller", authMiddleware, isSeller, (req, res) => {
-  res.json({ message: `Welcome Seller ${req.user.userId}, this route is protected` });
-});
-
-
-// Get all products
-app.get("/products", async (req, res) => {
-  try {
-    const products = await Product.find();
-    res.json(products);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching products" });
-  }
-});
-
-// Update product
-app.put("/products/:id", upload.single("file"), async (req, res) => {
+app.put("/products/:id", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
     const { name, details, quantity, category, price } = req.body;
-    const updateData = {
-      name,
-      details,
-      quantity: Number(quantity),
-      category,
-      price: Number(price),       // ✅ update price
-    };
+    const updateData = { name, details, quantity: Number(quantity), category, price: Number(price) };
     if (req.file) updateData.imageUrl = `/uploads/${req.file.filename}`;
 
     const updated = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -216,17 +155,14 @@ app.put("/products/:id", upload.single("file"), async (req, res) => {
   }
 });
 
-// Delete product
-app.delete("/products/:id", async (req, res) => {
+app.delete("/products/:id", authMiddleware, isSeller, async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Product not found" });
 
     if (deleted.imageUrl) {
       const filePath = path.join(process.cwd(), deleted.imageUrl.replace("/", path.sep));
-      fs.unlink(filePath, (err) => {
-        if (err) console.error("Error deleting file:", err);
-      });
+      fs.unlink(filePath, (err) => { if (err) console.error("Error deleting file:", err); });
     }
 
     res.json({ message: "Product deleted successfully" });
@@ -236,12 +172,21 @@ app.delete("/products/:id", async (req, res) => {
   }
 });
 
-
-
-// ----------------- Increment / Decrement Quantity -----------------
-app.patch("/products/:id/quantity", async (req, res) => {
+// Get all products (public)
+app.get("/products", async (req, res) => {
   try {
-    const { action } = req.body; // "increment" or "decrement"
+    const products = await Product.find();
+    res.json(products);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error fetching products" });
+  }
+});
+
+// Increment / Decrement quantity
+app.patch("/products/:id/quantity", authMiddleware, isSeller, async (req, res) => {
+  try {
+    const { action } = req.body;
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ message: "Product not found" });
 
@@ -256,16 +201,10 @@ app.patch("/products/:id/quantity", async (req, res) => {
   }
 });
 
-
-// ----------------- Get products for listing (only image + price) -----------------
-// Get product listing (protected)
+// Get products for listing (image + price)
 app.get("/products/listing", async (req, res) => {
   try {
-    // imageUrl, price, category aur name return
-    const products = await Product.find(
-      {},
-      { imageUrl: 1, price: 1, category: 1, name: 1, _id: 1 }
-    );
+    const products = await Product.find({}, { imageUrl: 1, price: 1, category: 1, name: 1, _id: 1 });
     res.json(products);
   } catch (err) {
     console.error(err);
@@ -274,33 +213,30 @@ app.get("/products/listing", async (req, res) => {
 });
 
 
+// only for seller :- 
+app.get("/seller", authMiddleware, isSeller, (req, res) => {
+  console.log("Decoded user:", req.user);
+  res.json({ message: `Welcome Seller ${req.user.userId}` });
+});
 
-// ----------------- Profile with Message -----------------
+// Profile route (authenticated)
 app.get("/profile", authMiddleware, async (req, res) => {
   try {
     const member = await Member.findById(req.user.userId).select("-password");
     if (!member) return res.status(404).json({ message: "User not found" });
 
-    res.json({
-      message: `Hello ${member.name}, welcome to your profile!`,
-      user: member,
-    });
+    res.json({ message: `Hello ${member.name}, welcome to your profile!`, user: member });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error fetching profile" });
   }
 });
 
-
 // ----------------- Connect to MongoDB -----------------
-mongoose
-  .connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error(err));
+  .catch(err => console.error(err));
 
-
-  
 // ----------------- Start Server -----------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
