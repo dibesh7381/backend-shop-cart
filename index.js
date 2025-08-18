@@ -176,32 +176,12 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
 
 // Seller-only route
 app.get("/seller-dashboard", authMiddleware, isSeller, (req, res) => {
-  res.json({ message: `Welcome Seller ${req.user.userId}, this is your dashboard!` });
+  res.json({ message: `Welcome Seller ${req.user.name}, this is your dashboard!` });
 });
 
-// ----------------- Seed a seller (temporary) -----------------
-app.get("/seed-seller", async (req, res) => {
-  try {
-    const existing = await Member.findOne({ email: "santosh@example.com" });
-    if (existing) return res.json({ message: "Seller already exists" });
-
-    const hashedPassword = await bcrypt.hash("santosh1234", 10);
-
-    const seller = new Member({
-      name: "Santosh",
-      email: "santosh@example.com",
-      password: hashedPassword,
-      role: "seller",
-    });
-
-    await seller.save();
-    res.json({ message: "Seller seeded successfully", user: { name: "Santosh", email: "santosh@example.com", role: "seller" } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error seeding seller" });
-  }
+app.get("/seller", authMiddleware, isSeller, (req, res) => {
+  res.json({ message: `Welcome Seller ${req.user.userId}, this route is protected` });
 });
-
 
 
 // Get all products
