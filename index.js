@@ -232,34 +232,6 @@ app.get("/profile", authMiddleware, async (req, res) => {
   }
 });
 
-// one time setup :-  
-app.get("/setup-seller", async (req, res) => {
-  try {
-    const existingSeller = await Member.findOne({ name: "Dibesh", role: "seller" });
-    if (existingSeller) {
-      return res.status(200).json({ message: "Seller already exists", seller: existingSeller });
-    }
-
-    // Hash password
-    const plainPassword = "1234";
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
-
-    const newSeller = new Member({
-      name: "Dibesh",
-      email: "dibesh@example.com",
-      password: hashedPassword,
-      role: "seller",
-    });
-
-    await newSeller.save();
-    res.status(201).json({ message: "Seller created successfully", seller: newSeller });
-  } catch (err) {
-    console.error("Setup-seller error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
-
 // ----------------- Connect to MongoDB -----------------
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
