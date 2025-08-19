@@ -245,7 +245,6 @@
 // const PORT = process.env.PORT || 5000;
 // app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
-
 import express from "express";
 import mongoose from "mongoose";
 import multer from "multer";
@@ -269,7 +268,7 @@ cloudinary.config({
 });
 
 const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+  cloudinary,
   params: {
     folder: "shop_products",
     allowed_formats: ["jpg", "jpeg", "png"]
@@ -350,7 +349,11 @@ app.post("/login", async (req, res) => {
     const isMatch = await bcrypt.compare(password, member.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ userId: member._id, role: member.role, name: member.name }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { userId: member._id, role: member.role, name: member.name },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     res.json({
       token,
@@ -421,10 +424,13 @@ app.get("/products", async (req, res) => {
   }
 });
 
-// Get products for listing (image + price)
+// Get products for listing (image + price + quantity)
 app.get("/products/listing", async (req, res) => {
   try {
-    const products = await Product.find({}, { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, _id: 1 });
+    const products = await Product.find(
+      {},
+      { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, _id: 1 }
+    );
     res.json(products);
   } catch (err) {
     console.error(err);
@@ -432,7 +438,7 @@ app.get("/products/listing", async (req, res) => {
   }
 });
 
-// only for seller
+// Only for seller
 app.get("/seller", authMiddleware, isSeller, (req, res) => {
   res.json({ message: `Welcome Seller ${req.user.userId}` });
 });
