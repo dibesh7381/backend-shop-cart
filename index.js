@@ -204,13 +204,17 @@ app.patch("/products/:id/quantity", authMiddleware, isSeller, async (req, res) =
 // Get products for listing (image + price)
 app.get("/products/listing", async (req, res) => {
   try {
-    const products = await Product.find({}, { imageUrl: 1, price: 1, category: 1, name: 1, _id: 1 });
+    const products = await Product.find(
+      {},
+      { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, _id: 1 } // ✅ quantity added
+    );
     res.json(products);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error fetching products for listing" });
   }
 });
+
 
 
 // only for seller :- 
