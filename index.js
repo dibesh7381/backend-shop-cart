@@ -206,7 +206,7 @@ app.get("/products/listing", async (req, res) => {
   try {
     const products = await Product.find(
       {},
-      { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, _id: 1 } // ✅ quantity added
+      { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, _id: 1 } 
     );
     res.json(products);
   } catch (err) {
