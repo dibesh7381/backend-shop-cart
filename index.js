@@ -406,12 +406,22 @@ app.delete("/products/:id", authMiddleware, isSeller, async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Product not found" });
-    res.json({ message: "Product deleted successfully" });
+
+    if (deleted.imageUrl) {
+      const publicId = deleted.imageUrl
+        .split("/upload/")[1]
+        .replace(/\..+$/, "") 
+        .split("/").slice(1).join("/");
+      cloudinary.uploader.destroy(publicId, (err, result) => err ? console.error(err) : console.log(result));
+    }
+
+    res.json({ message: "Product and image deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error deleting product" });
   }
 });
+
 
 // Get all products (public)
 app.get("/products", async (req, res) => {
