@@ -235,6 +235,18 @@ app.post("/products/increase-quantity/:id", authMiddleware, async (req, res) => 
   }
 });
 
+app.post("/products/increase-many", authMiddleware, async (req, res) => {
+  try {
+    const items = req.body.items; // [{id: 123, quantity: 3}, {id: 456, quantity: 2}]
+    for (const item of items) {
+      await Product.findByIdAndUpdate(item.id, { $inc: { quantity: item.quantity } });
+    }
+    res.json({ message: "Stock restored for all items" });
+  } catch (err) {
+    res.status(500).json({ message: "Error restoring stock" });
+  }
+});
+
 // ----------------- Profile & Seller Routes -----------------
 app.get("/seller", authMiddleware, isSeller, (req, res) => {
   res.json({ message: `Welcome Seller ${req.user.userId}` });
