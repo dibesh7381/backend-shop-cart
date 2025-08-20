@@ -377,7 +377,7 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
       quantity: Number(quantity),
       category,
       price: Number(price),
-      imageUrl: req.file.path // Cloudinary URL
+      imageUrl: req.file.path
     });
 
     const saved = await product.save();
@@ -422,8 +422,7 @@ app.delete("/products/:id", authMiddleware, isSeller, async (req, res) => {
   }
 });
 
-
-// Get all products (public)
+// Get all products
 app.get("/products", async (req, res) => {
   try {
     const products = await Product.find();
@@ -434,7 +433,7 @@ app.get("/products", async (req, res) => {
   }
 });
 
-// Get products for listing (image + price + quantity)
+// Get products for listing
 app.get("/products/listing", async (req, res) => {
   try {
     const products = await Product.find(
@@ -448,12 +447,44 @@ app.get("/products/listing", async (req, res) => {
   }
 });
 
-// Only for seller
+// ----------------- Quantity Update Endpoints -----------------
+
+// Decrease quantity by 1 (add to cart)
+app.post("/products/decrease-quantity/:id", authMiddleware, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    if (product.quantity <= 0) return res.status(400).json({ message: "Out of stock" });
+
+    product.quantity -= 1;
+    await product.save();
+    res.json({ message: "Quantity decreased", quantity: product.quantity });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error decreasing quantity" });
+  }
+});
+
+// Increase quantity by 1 (remove from cart)
+app.post("/products/increase-quantity/:id", authMiddleware, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    product.quantity += 1;
+    await product.save();
+    res.json({ message: "Quantity increased", quantity: product.quantity });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error increasing quantity" });
+  }
+});
+
+// ----------------- Profile & Seller Routes -----------------
 app.get("/seller", authMiddleware, isSeller, (req, res) => {
   res.json({ message: `Welcome Seller ${req.user.userId}` });
 });
 
-// Profile route (authenticated)
 app.get("/profile", authMiddleware, async (req, res) => {
   try {
     const member = await Member.findById(req.user.userId).select("-password");
@@ -465,11 +496,10 @@ app.get("/profile", authMiddleware, async (req, res) => {
   }
 });
 
-// ----------------- Connect to MongoDB -----------------
+// ----------------- Connect MongoDB & Start Server -----------------
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error(err));
 
-// ----------------- Start Server -----------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
