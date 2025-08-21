@@ -1,5 +1,4 @@
 
-
 import express from "express";
 import mongoose from "mongoose";
 import multer from "multer";
@@ -52,26 +51,6 @@ const memberSchema = new mongoose.Schema({
 
 const Member = mongoose.model("Member", memberSchema);
 
-// ----------------- Auth Middleware -----------------
-const authMiddleware = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({ message: "Token is not valid" });
-  }
-};
-
-// ----------------- Role Middleware -----------------
-const isSeller = (req, res, next) => {
-  if (req.user?.role === "seller") return next();
-  return res.status(403).json({ message: "Access denied, only sellers allowed" });
-};
-
 // ----------------- Signup -----------------
 app.post("/signup", async (req, res) => {
   try {
@@ -120,6 +99,27 @@ app.post("/login", async (req, res) => {
   }
 });
 
+// ----------------- Auth Middleware -----------------
+const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Token is not valid" });
+  }
+};
+
+// ----------------- Role Middleware -----------------
+const isSeller = (req, res, next) => {
+  if (req.user && req.user.role === "seller") return next()
+  return res.status(403).json({ message: "Access denied, only sellers allowed" });
+};
+
+
 // ----------------- Product Routes (Seller only) -----------------
 app.post("/products", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
@@ -127,10 +127,10 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
 
     const { name, details, quantity, category, price } = req.body;
     const product = new Product({
-      name,
-      details,
+      name : name,
+      details : details,
       quantity: Number(quantity),
-      category,
+      category  : category,
       price: Number(price),
       imageUrl: req.file.path
     });
@@ -235,6 +235,7 @@ app.post("/products/increase-quantity/:id", authMiddleware, async (req, res) => 
   }
 });
 
+// remove all item from cart and increse quantity by based on selected stocks
 app.post("/products/increase-many", authMiddleware, async (req, res) => {
   try {
     const items = req.body.items; // [{id: 123, quantity: 3}, {id: 456, quantity: 2}]
