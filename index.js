@@ -61,7 +61,7 @@ app.post("/signup", async (req, res) => {
     if (existingMember) return res.status(400).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newMember = new Member({ name, email, password: hashedPassword, role: role || "customer" });
+    const newMember = new Member({ name : name, email : email, password: hashedPassword, role: role || "customer" });
     await newMember.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -115,7 +115,9 @@ const authMiddleware = (req, res, next) => {
 
 // ----------------- Role Middleware -----------------
 const isSeller = (req, res, next) => {
-  if (req.user && req.user.role === "seller") return next()
+  if (req.user && req.user.role === "seller") {
+      return next()
+  }
   return res.status(403).json({ message: "Access denied, only sellers allowed" });
 };
 
@@ -126,12 +128,7 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
     if (!req.file) return res.status(400).json({ message: "No file received" });
 
     const { name, details, quantity, category, price } = req.body;
-    const product = new Product({
-      name : name,
-      details : details,
-      quantity: Number(quantity),
-      category  : category,
-      price: Number(price),
+    const product = new Product({ name : name, details : details, quantity: Number(quantity), category  : category, price: Number(price),
       imageUrl: req.file.path
     });
 
@@ -146,7 +143,7 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
 app.put("/products/:id", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
     const { name, details, quantity, category, price } = req.body;
-    const updateData = { name, details, quantity: Number(quantity), category, price: Number(price) };
+    const updateData = { name : name, details : details, quantity: Number(quantity), category : category, price: Number(price) };
     if (req.file) updateData.imageUrl = req.file.path;
 
     const updated = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -249,9 +246,6 @@ app.post("/products/increase-many", authMiddleware, async (req, res) => {
 });
 
 // ----------------- Profile & Seller Routes -----------------
-app.get("/seller", authMiddleware, isSeller, (req, res) => {
-  res.json({ message: `Welcome Seller ${req.user.userId}` });
-});
 
 app.get("/profile", authMiddleware, async (req, res) => {
   try {
