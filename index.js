@@ -354,6 +354,24 @@ app.get("/profile", authMiddleware, async (req, res) => {
   }
 });
 
+app.get("/add-seller", async (req, res) => {
+  try {
+    const hashedPassword = await bcrypt.hash("santosh1234", 10); // Manual password
+    const newSeller = new Member({
+      name: "santosh",
+      email: "santosh@example.com",
+      password: hashedPassword,
+      role: "seller"
+    });
+
+    await newSeller.save();
+    res.json({ message: "Seller added successfully", seller: newSeller });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error adding seller" });
+  }
+});
+
 // ----------------- Connect MongoDB & Start Server -----------------
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
