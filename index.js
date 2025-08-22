@@ -75,7 +75,8 @@ app.post("/signup", async (req, res) => {
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: "All fields are required" });
+    if (!email || !password)
+      return res.status(400).json({ message: "All fields are required" });
 
     const member = await Member.findOne({ email });
     if (!member) return res.status(400).json({ message: "Invalid credentials" });
@@ -89,13 +90,18 @@ app.post("/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    // ✅ Send success message along with token and user info
     res.json({
+      message: "Login successful!",
       token,
-      user: { id: member._id, name: member.name, email: member.email, role: member.role }
+      user: {
+        userId: member._id,
+        role: member.role,
+        name: member.name,
+      },
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error logging in" });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -265,3 +271,5 @@ mongoose.connect(process.env.MONGO_URI)
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+
