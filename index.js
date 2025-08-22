@@ -282,18 +282,21 @@ app.get("/products/seller", authMiddleware, isSeller, async (req, res) => {
 
 
 // Get products for listing
+// Get products for listing with seller name
 app.get("/products/listing", async (req, res) => {
   try {
+    // Populate sellerId field with name only
     const products = await Product.find(
       {},
-      { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, _id: 1 }
-    );
+      { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, sellerId: 1 }
+    ).populate("sellerId", "name"); // populate name of seller
     res.json(products);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error fetching products for listing" });
   }
 });
+
 
 // ----------------- Quantity Update Endpoints -----------------
 
@@ -354,23 +357,23 @@ app.get("/profile", authMiddleware, async (req, res) => {
   }
 });
 
-app.get("/add-seller", async (req, res) => {
-  try {
-    const hashedPassword = await bcrypt.hash("santosh1234", 10); // Manual password
-    const newSeller = new Member({
-      name: "santosh",
-      email: "santosh@example.com",
-      password: hashedPassword,
-      role: "seller"
-    });
+// app.get("/add-seller", async (req, res) => {
+//   try {
+//     const hashedPassword = await bcrypt.hash("santosh1234", 10); // Manual password
+//     const newSeller = new Member({
+//       name: "santosh",
+//       email: "santosh@example.com",
+//       password: hashedPassword,
+//       role: "seller"
+//     });
 
-    await newSeller.save();
-    res.json({ message: "Seller added successfully", seller: newSeller });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error adding seller" });
-  }
-});
+//     await newSeller.save();
+//     res.json({ message: "Seller added successfully", seller: newSeller });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Error adding seller" });
+//   }
+// });
 
 // ----------------- Connect MongoDB & Start Server -----------------
 mongoose.connect(process.env.MONGO_URI)
