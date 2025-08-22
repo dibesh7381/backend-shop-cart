@@ -31,14 +31,6 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage });
 
 // ----------------- MongoDB Models -----------------
-// const productSchema = new mongoose.Schema({
-//   name: { type: String, required: true },
-//   details: { type: String, required: true },
-//   quantity: { type: Number, required: true, min: 0 },
-//   category: { type: String, required: true },
-//   price: { type: Number, required: true, min: 0 },
-//   imageUrl: { type: String, required: true }
-// }, { collection: "product", versionKey: false });
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   details: { type: String, required: true },
@@ -99,7 +91,6 @@ app.post("/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    // ✅ Send success message along with token and user info
     res.json({
       message: "Login successful!",
       token,
@@ -128,7 +119,7 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// ----------------- Role Middleware -----------------
+// ----------------- Role Middleware only for seller -----------------
 const isSeller = (req, res, next) => {
   if (req.user && req.user.role === "seller") {
       return next()
@@ -138,22 +129,6 @@ const isSeller = (req, res, next) => {
 
 
 // ----------------- Product Routes (Seller only) -----------------
-// app.post("/products", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
-//   try {
-//     if (!req.file) return res.status(400).json({ message: "No file received" });
-
-//     const { name, details, quantity, category, price } = req.body;
-//     const product = new Product({ name : name, details : details, quantity: Number(quantity), category  : category, price: Number(price),
-//       imageUrl: req.file.path
-//     });
-
-//     const saved = await product.save();
-//     res.status(200).json({ message: "Product uploaded successfully", product: saved });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: "Error uploading product" });
-//   }
-// });
 
 app.post("/products", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
@@ -167,7 +142,7 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
       category,
       price: Number(price),
       imageUrl: req.file.path,
-      sellerId: req.user.userId // ✅ attach current seller
+      sellerId: req.user.userId
     });
 
     const saved = await product.save();
@@ -178,40 +153,6 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
   }
 });
 
-
-// app.put("/products/:id", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
-//   try {
-//     const { name, details, quantity, category, price } = req.body;
-//     const updateData = { name : name, details : details, quantity: Number(quantity), category : category, price: Number(price) };
-//     if (req.file) updateData.imageUrl = req.file.path;
-
-//     const updated = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
-//     res.json({ message: "Product updated successfully", product: updated });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: "Error updating product" });
-//   }
-// });
-
-// app.delete("/products/:id", authMiddleware, isSeller, async (req, res) => {
-//   try {
-//     const deleted = await Product.findByIdAndDelete(req.params.id);
-//     if (!deleted) return res.status(404).json({ message: "Product not found" });
-
-//     if (deleted.imageUrl) {
-//       const publicId = deleted.imageUrl
-//         .split("/upload/")[1]
-//         .replace(/\..+$/, "") 
-//         .split("/").slice(1).join("/");
-//       cloudinary.uploader.destroy(publicId, (err, result) => err ? console.error(err) : console.log(result));
-//     }
-
-//     res.json({ message: "Product and image deleted successfully" });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: "Error deleting product" });
-//   }
-// });
 
 app.put("/products/:id", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
@@ -258,6 +199,17 @@ app.delete("/products/:id", authMiddleware, isSeller, async (req, res) => {
   }
 });
 
+// This is for individual seller if login 
+app.get("/products/seller", authMiddleware, isSeller, async (req, res) => {
+  try {
+    const products = await Product.find({ sellerId: req.user.userId });
+    res.json(products);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error fetching seller products" });
+  }
+});
+
 
 // Get all products
 app.get("/products", async (req, res) => {
@@ -270,18 +222,8 @@ app.get("/products", async (req, res) => {
   }
 });
 
-app.get("/products/seller", authMiddleware, isSeller, async (req, res) => {
-  try {
-    const products = await Product.find({ sellerId: req.user.userId });
-    res.json(products);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching seller products" });
-  }
-});
 
 
-// Get products for listing
 // Get products for listing with seller name
 app.get("/products/listing", async (req, res) => {
   try {
@@ -342,7 +284,8 @@ app.post("/products/increase-many", authMiddleware, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: "Error restoring stock" });
   }
-});
+})
+
 
 // ----------------- Profile & Seller Routes -----------------
 
@@ -357,6 +300,8 @@ app.get("/profile", authMiddleware, async (req, res) => {
   }
 });
 
+
+// for adding seller in database
 // app.get("/add-seller", async (req, res) => {
 //   try {
 //     const hashedPassword = await bcrypt.hash("santosh1234", 10); // Manual password
