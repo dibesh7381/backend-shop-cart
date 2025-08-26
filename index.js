@@ -59,6 +59,77 @@ const memberSchema = new mongoose.Schema({
 
 const Member = mongoose.model("Member", memberSchema);
 
+
+
+// ----------------- Signup -----------------
+app.post("/signup", async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ message: "All fields are required" });
+
+    const existingMember = await Member.findOne({ email });
+    if (existingMember) return res.status(400).json({ message: "User already exists" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newMember = new Member({ name: name, email: email, password: hashedPassword, role: role || "customer", profilePic: "" });
+    await newMember.save();
+
+    res.status(201).json({ message: "User registered successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error registering user" });
+  }
+});
+
+// ----------------- Login -----------------
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password)
+      return res.status(400).json({ message: "All fields are required" });
+
+    const member = await Member.findOne({ email });
+    if (!member) return res.status(400).json({ message: "Invalid credentials" });
+
+    const isMatch = await bcrypt.compare(password, member.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+
+    const token = jwt.sign(
+      { userId: member._id, role: member.role, name: member.name },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      message: "Login successful!",
+      token,
+      user: {
+        userId: member._id,
+        role: member.role,
+        name: member.name,
+        email: member.email,
+        profilePic: member.profilePic || "" // <-- return profilePic
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ----------------- Auth Middleware -----------------
+const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Token is not valid" });
+  }
+};
+
 // ----------------- Cart Model -----------------
 const cartSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "Member", required: true },
@@ -157,76 +228,6 @@ app.delete("/cart/clear", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Error clearing cart" });
   }
 });
-
-
-// ----------------- Signup -----------------
-app.post("/signup", async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: "All fields are required" });
-
-    const existingMember = await Member.findOne({ email });
-    if (existingMember) return res.status(400).json({ message: "User already exists" });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newMember = new Member({ name: name, email: email, password: hashedPassword, role: role || "customer", profilePic: "" });
-    await newMember.save();
-
-    res.status(201).json({ message: "User registered successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error registering user" });
-  }
-});
-
-// ----------------- Login -----------------
-app.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password)
-      return res.status(400).json({ message: "All fields are required" });
-
-    const member = await Member.findOne({ email });
-    if (!member) return res.status(400).json({ message: "Invalid credentials" });
-
-    const isMatch = await bcrypt.compare(password, member.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
-
-    const token = jwt.sign(
-      { userId: member._id, role: member.role, name: member.name },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.json({
-      message: "Login successful!",
-      token,
-      user: {
-        userId: member._id,
-        role: member.role,
-        name: member.name,
-        email: member.email,
-        profilePic: member.profilePic || "" // <-- return profilePic
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// ----------------- Auth Middleware -----------------
-const authMiddleware = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({ message: "Token is not valid" });
-  }
-};
 
 // ----------------- Role Middleware only for seller -----------------
 const isSeller = (req, res, next) => {
