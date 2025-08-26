@@ -198,6 +198,38 @@ app.delete("/products/:id", authMiddleware, isSeller, async (req, res) => {
   }
 });
 
+// Decrease product quantity (for cart + button)
+app.post("/products/decrease-quantity/:id", authMiddleware, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    if (product.quantity <= 0) return res.status(400).json({ message: "Out of stock" });
+
+    product.quantity -= 1;
+    await product.save();
+    res.json({ message: "Quantity decreased", quantity: product.quantity });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error updating quantity" });
+  }
+});
+
+// Increase product quantity (for cart - button)
+app.post("/products/increase-quantity/:id", authMiddleware, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    product.quantity += 1;
+    await product.save();
+    res.json({ message: "Quantity increased", quantity: product.quantity });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error updating quantity" });
+  }
+});
+
+
 app.get("/products/listing", async (req, res) => {
   try {
     const products = await Product.find({}, { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, sellerId: 1 }).populate("sellerId", "name");
