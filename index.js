@@ -1,4 +1,3 @@
-
 import express from "express";
 import mongoose from "mongoose";
 import multer from "multer";
@@ -21,18 +20,14 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Storage for general uploads (products) and profile pics (we'll use same storage but different folder param)
+// ----------------- Multer Storage -----------------
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: (req, file) => {
-    // Use different folders based on route or fieldname if needed
-    // For profile uploads fieldname is likely "file", we will route by URL in endpoint
-    return {
-      folder: req.baseUrl && req.baseUrl.includes("profile") ? "profile_pics" : "shop_products",
-      allowed_formats: ["jpg", "jpeg", "png", "webp"],
-      transformation: [{ width: 1000, crop: "limit" }], // limit size to avoid huge files
-    };
-  },
+  params: (req, file) => ({
+    folder: req.baseUrl && req.baseUrl.includes("profile") ? "profile_pics" : "shop_products",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    transformation: [{ width: 1000, crop: "limit" }],
+  }),
 });
 const upload = multer({ storage });
 
@@ -54,10 +49,23 @@ const memberSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, default: "customer" },
-  profilePic: { type: String, default: "" } // <-- added profile picture URL
+  profilePic: { type: String, default: "" }
 }, { collection: "members", versionKey: false });
 
 const Member = mongoose.model("Member", memberSchema);
+
+// ----------------- Cart Model -----------------
+const cartSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "Member", required: true },
+  items: [
+    {
+      productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+      quantity: { type: Number, default: 1 },
+    }
+  ],
+}, { collection: "carts", versionKey: false });
+
+const Cart = mongoose.model("Cart", cartSchema);
 
 // ----------------- Signup -----------------
 app.post("/signup", async (req, res) => {
@@ -69,7 +77,7 @@ app.post("/signup", async (req, res) => {
     if (existingMember) return res.status(400).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newMember = new Member({ name: name, email: email, password: hashedPassword, role: role || "customer", profilePic: "" });
+    const newMember = new Member({ name, email, password: hashedPassword, role: role || "customer" });
     await newMember.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -106,7 +114,7 @@ app.post("/login", async (req, res) => {
         role: member.role,
         name: member.name,
         email: member.email,
-        profilePic: member.profilePic || "" // <-- return profilePic
+        profilePic: member.profilePic || ""
       },
     });
   } catch (err) {
@@ -128,20 +136,16 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// ----------------- Role Middleware only for seller -----------------
+// ----------------- Role Middleware -----------------
 const isSeller = (req, res, next) => {
-  if (req.user && req.user.role === "seller") {
-      return next()
-  }
+  if (req.user && req.user.role === "seller") return next();
   return res.status(403).json({ message: "Access denied, only sellers allowed" });
 };
 
-// ----------------- Product Routes (Seller only) -----------------
-
+// ----------------- Product Routes -----------------
 app.post("/products", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file received" });
-
     const { name, details, quantity, category, price } = req.body;
     const product = new Product({
       name,
@@ -152,7 +156,6 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
       imageUrl: req.file.path,
       sellerId: req.user.userId
     });
-
     const saved = await product.save();
     res.status(200).json({ message: "Product uploaded successfully", product: saved });
   } catch (err) {
@@ -161,12 +164,10 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
   }
 });
 
-
 app.put("/products/:id", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ message: "Product not found" });
-
     if (product.sellerId.toString() !== req.user.userId)
       return res.status(403).json({ message: "Access denied" });
 
@@ -186,49 +187,20 @@ app.delete("/products/:id", authMiddleware, isSeller, async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ message: "Product not found" });
-
     if (product.sellerId.toString() !== req.user.userId)
       return res.status(403).json({ message: "Access denied" });
 
     await Product.findByIdAndDelete(req.params.id);
-
-    if (product.imageUrl) {
-      // Attempt to cleanup Cloudinary resource if path contains upload
-      try {
-        const publicIdPart = product.imageUrl.split("/upload/")[1];
-        if (publicIdPart) {
-          const publicId = publicIdPart.replace(/\..+$/, "").split("/").slice(1).join("/");
-          if (publicId) {
-            cloudinary.uploader.destroy(publicId, (err, result) => err ? console.error(err) : console.log("Cloudinary delete:", result));
-          }
-        }
-      } catch (e) {
-        console.warn("Could not derive publicId to delete from Cloudinary URL:", e);
-      }
-    }
-
-    res.json({ message: "Product and image deleted successfully" });
+    res.json({ message: "Product deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error deleting product" });
   }
 });
 
-// This is for individual seller if login 
-app.get("/products/seller", authMiddleware, isSeller, async (req, res) => {
+app.get("/products/listing", async (req, res) => {
   try {
-    const products = await Product.find({ sellerId: req.user.userId });
-    res.json(products);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching seller products" });
-  }
-});
-
-// Get all products
-app.get("/products", async (req, res) => {
-  try {
-    const products = await Product.find();
+    const products = await Product.find({}, { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, sellerId: 1 }).populate("sellerId", "name");
     res.json(products);
   } catch (err) {
     console.error(err);
@@ -236,108 +208,93 @@ app.get("/products", async (req, res) => {
   }
 });
 
-// Get products for listing with seller name
-app.get("/products/listing", async (req, res) => {
+// ----------------- Cart Routes -----------------
+app.post("/cart/add", authMiddleware, async (req, res) => {
+  const { productId, quantity } = req.body;
+  const userId = req.user.userId;
   try {
-    // Populate sellerId field with name only
-    const products = await Product.find(
-      {},
-      { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, sellerId: 1 }
-    ).populate("sellerId", "name"); // populate name of seller
-    res.json(products);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching products for listing" });
-  }
-});
+    let cart = await Cart.findOne({ userId });
+    if (!cart) cart = new Cart({ userId, items: [] });
 
-// ----------------- Quantity Update Endpoints -----------------
-
-// Decrease quantity by 1 (add to cart)
-app.post("/products/decrease-quantity/:id", authMiddleware, async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    if (product.quantity <= 0) return res.status(400).json({ message: "Out of stock" });
-
-    product.quantity -= 1;
-    await product.save();
-    res.json({ message: "Quantity decreased", quantity: product.quantity });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error decreasing quantity" });
-  }
-});
-
-// Increase quantity by 1 (remove from cart)
-app.post("/products/increase-quantity/:id", authMiddleware, async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-
-    product.quantity += 1;
-    await product.save();
-    res.json({ message: "Quantity increased", quantity: product.quantity });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error increasing quantity" });
-  }
-});
-
-// remove all item from cart and increse quantity by based on selected stocks
-app.post("/products/increase-many", authMiddleware, async (req, res) => {
-  try {
-    const items = req.body.items; // [{id: 123, quantity: 3}, {id: 456, quantity: 2}]
-    for (const item of items) {
-      await Product.findByIdAndUpdate(item.id, { $inc: { quantity: item.quantity } });
+    const itemIndex = cart.items.findIndex(item => item.productId.toString() === productId);
+    if (itemIndex > -1) {
+      cart.items[itemIndex].quantity += quantity;
+    } else {
+      cart.items.push({ productId, quantity });
     }
-    res.json({ message: "Stock restored for all items" });
+
+    // Update product stock
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    if (product.quantity < quantity) return res.status(400).json({ message: "Not enough stock" });
+
+    product.quantity -= quantity;
+    await product.save();
+    await cart.save();
+    res.json({ message: "Product added to cart", cart });
   } catch (err) {
-    res.status(500).json({ message: "Error restoring stock" });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// ----------------- Profile & Seller Routes -----------------
+app.get("/cart", authMiddleware, async (req, res) => {
+  try {
+    const cart = await Cart.findOne({ userId: req.user.userId }).populate("items.productId");
+    res.json(cart || { items: [] });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
-// Get profile
+app.post("/cart/remove", authMiddleware, async (req, res) => {
+  const { productId } = req.body;
+  try {
+    const cart = await Cart.findOne({ userId: req.user.userId });
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    const itemIndex = cart.items.findIndex(item => item.productId.toString() === productId);
+    if (itemIndex > -1) {
+      const product = await Product.findById(productId);
+      product.quantity += cart.items[itemIndex].quantity;
+      await product.save();
+
+      cart.items.splice(itemIndex, 1);
+      await cart.save();
+    }
+    res.json({ message: "Item removed from cart", cart });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ----------------- Profile Routes -----------------
 app.get("/profile", authMiddleware, async (req, res) => {
   try {
     const member = await Member.findById(req.user.userId).select("-password");
-    if (!member) return res.status(404).json({ message: "User not found" });
-    res.json({ message: `Hello ${member.name}, welcome to your profile!`, user: member });
+    res.json({ user: member });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Error fetching profile" });
   }
 });
 
-// Update basic profile (e.g., name)
 app.put("/profile", authMiddleware, async (req, res) => {
   try {
     const { name } = req.body;
     const updated = await Member.findByIdAndUpdate(req.user.userId, { name }, { new: true }).select("-password");
-    res.json({ message: "Profile updated", user: updated });
+    res.json({ user: updated });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Error updating profile" });
   }
 });
 
-// Upload/update profile picture
-// Use same upload middleware (CloudinaryStorage). This will save file to cloudinary and req.file.path will be secure URL.
 app.put("/profile/pic", authMiddleware, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-
-    const updatedUser = await Member.findByIdAndUpdate(
-      req.user.userId,
-      { profilePic: req.file.path },
-      { new: true }
-    ).select("-password");
-
-    res.json({ message: "Profile picture updated!", user: updatedUser });
+    const updatedUser = await Member.findByIdAndUpdate(req.user.userId, { profilePic: req.file.path }, { new: true }).select("-password");
+    res.json({ user: updatedUser });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Error updating profile picture" });
   }
 });
@@ -349,4 +306,3 @@ mongoose.connect(process.env.MONGO_URI)
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
