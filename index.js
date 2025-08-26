@@ -59,6 +59,106 @@ const memberSchema = new mongoose.Schema({
 
 const Member = mongoose.model("Member", memberSchema);
 
+// ----------------- Cart Model -----------------
+const cartSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "Member", required: true },
+  items: [
+    {
+      productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+      quantity: { type: Number, required: true, min: 1 },
+    }
+  ]
+}, { collection: "carts", versionKey: false });
+
+const Cart = mongoose.model("Cart", cartSchema);
+
+// ----------------- Cart Routes -----------------
+
+// Get logged-in user's cart
+app.get("/cart", authMiddleware, async (req, res) => {
+  try {
+    const cart = await Cart.findOne({ userId: req.user.userId }).populate("items.productId");
+    res.json(cart || { userId: req.user.userId, items: [] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error fetching cart" });
+  }
+});
+
+// Add product to cart (or increase quantity)
+app.post("/cart/add", authMiddleware, async (req, res) => {
+  try {
+    const { productId, quantity } = req.body;
+    if (!productId || !quantity) return res.status(400).json({ message: "ProductId and quantity required" });
+
+    let cart = await Cart.findOne({ userId: req.user.userId });
+    if (!cart) {
+      cart = new Cart({ userId: req.user.userId, items: [] });
+    }
+
+    const itemIndex = cart.items.findIndex(i => i.productId.toString() === productId);
+    if (itemIndex > -1) {
+      cart.items[itemIndex].quantity += Number(quantity);
+    } else {
+      cart.items.push({ productId, quantity });
+    }
+
+    await cart.save();
+    res.json({ message: "Item added to cart", cart });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error adding to cart" });
+  }
+});
+
+// Update quantity of an item
+app.put("/cart/update/:productId", authMiddleware, async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    if (quantity < 1) return res.status(400).json({ message: "Quantity must be at least 1" });
+
+    const cart = await Cart.findOne({ userId: req.user.userId });
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    const item = cart.items.find(i => i.productId.toString() === req.params.productId);
+    if (!item) return res.status(404).json({ message: "Item not in cart" });
+
+    item.quantity = quantity;
+    await cart.save();
+    res.json({ message: "Cart updated", cart });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error updating cart" });
+  }
+});
+
+// Remove item from cart
+app.delete("/cart/remove/:productId", authMiddleware, async (req, res) => {
+  try {
+    const cart = await Cart.findOne({ userId: req.user.userId });
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    cart.items = cart.items.filter(i => i.productId.toString() !== req.params.productId);
+    await cart.save();
+    res.json({ message: "Item removed", cart });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error removing item from cart" });
+  }
+});
+
+// Clear entire cart
+app.delete("/cart/clear", authMiddleware, async (req, res) => {
+  try {
+    await Cart.findOneAndDelete({ userId: req.user.userId });
+    res.json({ message: "Cart cleared" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error clearing cart" });
+  }
+});
+
+
 // ----------------- Signup -----------------
 app.post("/signup", async (req, res) => {
   try {
