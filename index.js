@@ -67,7 +67,26 @@ const cartSchema = new mongoose.Schema({
 
 const Cart = mongoose.model("Cart", cartSchema);
 
-// ----------------- Signup -----------------
+// ----------------- Auth Helpers -----------------
+const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Token is not valid" });
+  }
+};
+
+const isSeller = (req, res, next) => {
+  if (req.user && req.user.role === "seller") return next();
+  return res.status(403).json({ message: "Access denied, only sellers allowed" });
+};
+
+// ----------------- Auth Routes -----------------
 app.post("/signup", async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -87,7 +106,6 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-// ----------------- Login -----------------
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -121,26 +139,6 @@ app.post("/login", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
-// ----------------- Auth Middleware -----------------
-const authMiddleware = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({ message: "Token is not valid" });
-  }
-};
-
-// ----------------- Role Middleware -----------------
-const isSeller = (req, res, next) => {
-  if (req.user && req.user.role === "seller") return next();
-  return res.status(403).json({ message: "Access denied, only sellers allowed" });
-};
 
 // ----------------- Product Routes -----------------
 app.post("/products", authMiddleware, isSeller, upload.single("file"), async (req, res) => {
@@ -198,41 +196,10 @@ app.delete("/products/:id", authMiddleware, isSeller, async (req, res) => {
   }
 });
 
-// Decrease product quantity (for cart + button)
-app.post("/products/decrease-quantity/:id", authMiddleware, async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    if (product.quantity <= 0) return res.status(400).json({ message: "Out of stock" });
-
-    product.quantity -= 1;
-    await product.save();
-    res.json({ message: "Quantity decreased", quantity: product.quantity });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error updating quantity" });
-  }
-});
-
-// Increase product quantity (for cart - button)
-app.post("/products/increase-quantity/:id", authMiddleware, async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-
-    product.quantity += 1;
-    await product.save();
-    res.json({ message: "Quantity increased", quantity: product.quantity });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error updating quantity" });
-  }
-});
-
-
 app.get("/products/listing", async (req, res) => {
   try {
-    const products = await Product.find({}, { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, sellerId: 1 }).populate("sellerId", "name");
+    const products = await Product.find({}, { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, sellerId: 1 })
+      .populate("sellerId", "name");
     res.json(products);
   } catch (err) {
     console.error(err);
@@ -240,11 +207,15 @@ app.get("/products/listing", async (req, res) => {
   }
 });
 
-// ----------------- Cart Routes -----------------
+// ----------------- Cart Routes (Backend-driven) -----------------
 app.post("/cart/add", authMiddleware, async (req, res) => {
   const { productId, quantity } = req.body;
   const userId = req.user.userId;
   try {
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    if (product.quantity < quantity) return res.status(400).json({ message: "Not enough stock" });
+
     let cart = await Cart.findOne({ userId });
     if (!cart) cart = new Cart({ userId, items: [] });
 
@@ -255,14 +226,10 @@ app.post("/cart/add", authMiddleware, async (req, res) => {
       cart.items.push({ productId, quantity });
     }
 
-    // Update product stock
-    const product = await Product.findById(productId);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    if (product.quantity < quantity) return res.status(400).json({ message: "Not enough stock" });
-
     product.quantity -= quantity;
     await product.save();
     await cart.save();
+
     res.json({ message: "Product added to cart", cart });
   } catch (err) {
     console.error(err);
@@ -270,33 +237,120 @@ app.post("/cart/add", authMiddleware, async (req, res) => {
   }
 });
 
+// Increase quantity in cart
+app.post("/cart/increase", authMiddleware, async (req, res) => {
+  const { productId } = req.body;
+  const userId = req.user.userId;
+  try {
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    if (product.quantity < 1) return res.status(400).json({ message: "Out of stock" });
+
+    const item = cart.items.find(i => i.productId.toString() === productId);
+    if (!item) return res.status(404).json({ message: "Item not in cart" });
+
+    item.quantity += 1;
+    product.quantity -= 1;
+
+    await product.save();
+    await cart.save();
+
+    res.json({ message: "Quantity increased", cart });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Decrease quantity in cart
+app.post("/cart/decrease", authMiddleware, async (req, res) => {
+  const { productId } = req.body;
+  const userId = req.user.userId;
+  try {
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    const item = cart.items.find(i => i.productId.toString() === productId);
+    if (!item) return res.status(404).json({ message: "Item not in cart" });
+
+    const product = await Product.findById(productId);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    item.quantity -= 1;
+    product.quantity += 1;
+
+    if (item.quantity <= 0) {
+      cart.items = cart.items.filter(i => i.productId.toString() !== productId);
+    }
+
+    await product.save();
+    await cart.save();
+
+    res.json({ message: "Quantity decreased", cart });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Remove item from cart
+app.post("/cart/remove", authMiddleware, async (req, res) => {
+  const { productId } = req.body;
+  const userId = req.user.userId;
+  try {
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    const item = cart.items.find(i => i.productId.toString() === productId);
+    if (!item) return res.status(404).json({ message: "Item not in cart" });
+
+    const product = await Product.findById(productId);
+    if (product) product.quantity += item.quantity;
+
+    cart.items = cart.items.filter(i => i.productId.toString() !== productId);
+
+    await product.save();
+    await cart.save();
+
+    res.json({ message: "Item removed", cart });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Clear entire cart
+app.post("/cart/clear", authMiddleware, async (req, res) => {
+  const userId = req.user.userId;
+  try {
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    for (const item of cart.items) {
+      const product = await Product.findById(item.productId);
+      if (product) product.quantity += item.quantity;
+      await product.save();
+    }
+
+    cart.items = [];
+    await cart.save();
+
+    res.json({ message: "Cart cleared", cart });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get cart
 app.get("/cart", authMiddleware, async (req, res) => {
   try {
     const cart = await Cart.findOne({ userId: req.user.userId }).populate("items.productId");
     res.json(cart || { items: [] });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-app.post("/cart/remove", authMiddleware, async (req, res) => {
-  const { productId } = req.body;
-  try {
-    const cart = await Cart.findOne({ userId: req.user.userId });
-    if (!cart) return res.status(404).json({ message: "Cart not found" });
-
-    const itemIndex = cart.items.findIndex(item => item.productId.toString() === productId);
-    if (itemIndex > -1) {
-      const product = await Product.findById(productId);
-      product.quantity += cart.items[itemIndex].quantity;
-      await product.save();
-
-      cart.items.splice(itemIndex, 1);
-      await cart.save();
-    }
-    res.json({ message: "Item removed from cart", cart });
-  } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
