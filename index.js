@@ -130,28 +130,19 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// ----------------- Cart Model -----------------
-const cartSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "Member", required: true },
-  items: [
-    {
-      productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
-      quantity: { type: Number, required: true, min: 1 },
-    }
-  ]
-}, { collection: "carts", versionKey: false });
+// ----------------- Cart Routes (Updated) -----------------
 
-const Cart = mongoose.model("Cart", cartSchema);
-
-// ----------------- Cart Routes -----------------
-
-// Get logged-in user's cart
+// Get logged-in user's cart with populated product info
 app.get("/cart", authMiddleware, async (req, res) => {
   try {
-    const cart = await Cart.findOne({ userId: req.user.userId }).populate("items.productId");
-    res.json(cart || { userId: req.user.userId, items: [] });
+    const cart = await Cart.findOne({ userId: req.user.userId }).populate({
+      path: "items.productId",
+      select: "name price imageUrl sellerId",
+      populate: { path: "sellerId", select: "name" }
+    });
+    res.json(cart ? cart.items : []);
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching cart:", err);
     res.status(500).json({ message: "Error fetching cart" });
   }
 });
@@ -175,7 +166,15 @@ app.post("/cart/add", authMiddleware, async (req, res) => {
     }
 
     await cart.save();
-    res.json({ message: "Item added to cart", cart });
+
+    // populate before sending to frontend
+    const populatedCart = await cart.populate({
+      path: "items.productId",
+      select: "name price imageUrl sellerId",
+      populate: { path: "sellerId", select: "name" }
+    });
+
+    res.json({ message: "Item added to cart", cart: populatedCart.items });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error adding to cart" });
@@ -196,7 +195,14 @@ app.put("/cart/update/:productId", authMiddleware, async (req, res) => {
 
     item.quantity = quantity;
     await cart.save();
-    res.json({ message: "Cart updated", cart });
+
+    const populatedCart = await cart.populate({
+      path: "items.productId",
+      select: "name price imageUrl sellerId",
+      populate: { path: "sellerId", select: "name" }
+    });
+
+    res.json({ message: "Cart updated", cart: populatedCart.items });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error updating cart" });
@@ -211,7 +217,14 @@ app.delete("/cart/remove/:productId", authMiddleware, async (req, res) => {
 
     cart.items = cart.items.filter(i => i.productId.toString() !== req.params.productId);
     await cart.save();
-    res.json({ message: "Item removed", cart });
+
+    const populatedCart = await cart.populate({
+      path: "items.productId",
+      select: "name price imageUrl sellerId",
+      populate: { path: "sellerId", select: "name" }
+    });
+
+    res.json({ message: "Item removed", cart: populatedCart.items });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error removing item from cart" });
@@ -222,12 +235,13 @@ app.delete("/cart/remove/:productId", authMiddleware, async (req, res) => {
 app.delete("/cart/clear", authMiddleware, async (req, res) => {
   try {
     await Cart.findOneAndDelete({ userId: req.user.userId });
-    res.json({ message: "Cart cleared" });
+    res.json({ message: "Cart cleared", cart: [] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error clearing cart" });
   }
 });
+
 
 // ----------------- Role Middleware only for seller -----------------
 const isSeller = (req, res, next) => {
