@@ -207,6 +207,22 @@ app.get("/products/listing", async (req, res) => {
   }
 });
 
+// ----------------- Seller-specific Products -----------------
+app.get("/products/seller", authMiddleware, isSeller, async (req, res) => {
+  try {
+    const sellerId = req.user.userId;
+    const products = await Product.find({ sellerId })
+      .select("name details quantity category price imageUrl") // select fields you want
+      .sort({ createdAt: -1 }); // optional: latest first
+
+    res.json(products);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error fetching seller products" });
+  }
+});
+
+
 // ----------------- Cart Routes (Backend-driven) -----------------
 app.post("/cart/add", authMiddleware, async (req, res) => {
   const { productId, quantity } = req.body;
