@@ -363,8 +363,9 @@ app.post("/cart/clear", authMiddleware, async (req, res) => {
 
 // Get cart
 app.get("/cart", authMiddleware, async (req, res) => {
+    const userId = req.user.userId;
   try {
-    const cart = await Cart.findOne({ userId: req.user.userId }).populate("items.productId");
+    const cart = await Cart.findOne({ userId }).populate("items.productId");
     res.json(cart || { items: [] });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
