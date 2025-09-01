@@ -67,7 +67,7 @@ const cartSchema = new mongoose.Schema({
 
 const Cart = mongoose.model("Cart", cartSchema);
 
-// ----------------- Auth Helpers -----------------
+// ----------------- Auth Middleware -----------------
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ message: "No token, authorization denied" });
@@ -96,7 +96,7 @@ app.post("/signup", async (req, res) => {
     if (existingMember) return res.status(400).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newMember = new Member({ name, email, password: hashedPassword, role: role || "customer" });
+    const newMember = new Member({ name : name, email : email, password: hashedPassword, role: role || "customer" });
     await newMember.save();
 
     res.status(201).json({ message: "User registered successfully" });
@@ -146,10 +146,10 @@ app.post("/products", authMiddleware, isSeller, upload.single("file"), async (re
     if (!req.file) return res.status(400).json({ message: "No file received" });
     const { name, details, quantity, category, price } = req.body;
     const product = new Product({
-      name,
-      details,
+      name : name,
+      details : details,
       quantity: Number(quantity),
-      category,
+      category : category,
       price: Number(price),
       imageUrl: req.file.path,
       sellerId: req.user.userId
@@ -170,7 +170,7 @@ app.put("/products/:id", authMiddleware, isSeller, upload.single("file"), async 
       return res.status(403).json({ message: "Access denied" });
 
     const { name, details, quantity, category, price } = req.body;
-    const updateData = { name, details, quantity: Number(quantity), category, price: Number(price) };
+    const updateData = { name : name, details : details, quantity: Number(quantity), category : category, price: Number(price) };
     if (req.file) updateData.imageUrl = req.file.path;
 
     const updated = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
