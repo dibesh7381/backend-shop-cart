@@ -1,7 +1,7 @@
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 
-// Add item to cart
+// Add to cart
 export const addToCart = async (req, res) => {
   const { productId, quantity } = req.body;
   const userId = req.user.userId;
@@ -93,7 +93,7 @@ export const decreaseQuantity = async (req, res) => {
   }
 };
 
-// Remove item from cart
+// Remove item
 export const removeItem = async (req, res) => {
   const { productId } = req.body;
   const userId = req.user.userId;
@@ -120,7 +120,7 @@ export const removeItem = async (req, res) => {
   }
 };
 
-// Clear cart
+// Clear entire cart
 export const clearCart = async (req, res) => {
   const userId = req.user.userId;
 
@@ -152,7 +152,6 @@ export const getCart = async (req, res) => {
     const cart = await Cart.findOne({ userId }).populate("items.productId");
     res.json(cart || { items: [] });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };

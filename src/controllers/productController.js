@@ -1,22 +1,14 @@
 import Product from "../models/Product.js";
-import { upload } from "../config/cloudinary.js";
 
-// Add new product
-export const addProduct = async (req, res) => {
+export const createProduct = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file received" });
     const { name, details, quantity, category, price } = req.body;
-
     const product = new Product({
-      name,
-      details,
-      quantity: Number(quantity),
-      category,
-      price: Number(price),
+      name, details, quantity: Number(quantity), category, price: Number(price),
       imageUrl: req.file.path,
       sellerId: req.user.userId
     });
-
     const saved = await product.save();
     res.status(200).json({ message: "Product uploaded successfully", product: saved });
   } catch (err) {
@@ -25,13 +17,11 @@ export const addProduct = async (req, res) => {
   }
 };
 
-// Update product
 export const updateProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ message: "Product not found" });
-    if (product.sellerId.toString() !== req.user.userId)
-      return res.status(403).json({ message: "Access denied" });
+    if (product.sellerId.toString() !== req.user.userId) return res.status(403).json({ message: "Access denied" });
 
     const { name, details, quantity, category, price } = req.body;
     const updateData = { name, details, quantity: Number(quantity), category, price: Number(price) };
@@ -45,13 +35,11 @@ export const updateProduct = async (req, res) => {
   }
 };
 
-// Delete product
 export const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ message: "Product not found" });
-    if (product.sellerId.toString() !== req.user.userId)
-      return res.status(403).json({ message: "Access denied" });
+    if (product.sellerId.toString() !== req.user.userId) return res.status(403).json({ message: "Access denied" });
 
     await Product.findByIdAndDelete(req.params.id);
     res.json({ message: "Product deleted successfully" });
@@ -61,7 +49,6 @@ export const deleteProduct = async (req, res) => {
   }
 };
 
-// List all products (for frontend)
 export const listProducts = async (req, res) => {
   try {
     const products = await Product.find({}, { imageUrl: 1, price: 1, category: 1, name: 1, quantity: 1, sellerId: 1 })
@@ -73,14 +60,12 @@ export const listProducts = async (req, res) => {
   }
 };
 
-// List seller's products
 export const sellerProducts = async (req, res) => {
   try {
     const sellerId = req.user.userId;
     const products = await Product.find({ sellerId })
       .select("name details quantity category price imageUrl")
       .sort({ createdAt: -1 });
-
     res.json(products);
   } catch (err) {
     console.error(err);

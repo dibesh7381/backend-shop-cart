@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import Member from "../models/Member.js";
 
-export const registerUser = async (req, res) => {
+export const signup = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     if (!name || !email || !password) return res.status(400).json({ message: "All fields are required" });
@@ -21,7 +21,7 @@ export const registerUser = async (req, res) => {
   }
 };
 
-export const loginUser = async (req, res) => {
+export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: "All fields are required" });
@@ -43,7 +43,7 @@ export const loginUser = async (req, res) => {
         name: member.name,
         email: member.email,
         profilePic: member.profilePic || ""
-      }
+      },
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });

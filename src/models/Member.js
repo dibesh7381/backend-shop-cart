@@ -9,4 +9,3 @@ const memberSchema = new mongoose.Schema({
 }, { collection: "members", versionKey: false });
 
 export default mongoose.model("Member", memberSchema);
-
