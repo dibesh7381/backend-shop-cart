@@ -418,9 +418,9 @@ import mongoose from "mongoose";
 
 // Import Routes
 import authRoutes from "./src/routes/authRoutes.js"
-import productRoutes from ".src/routes/productRoutes.js";
-import cartRoutes from ".src/routes/cartRoutes.js";
-import profileRoutes from ".src/routes/profileRoutes.js";
+import productRoutes from "./src/routes/productRoutes.js";
+import cartRoutes from "./src/routes/cartRoutes.js";
+import profileRoutes from "./src/routes/profileRoutes.js";
 
 dotenv.config();
 const app = express();
