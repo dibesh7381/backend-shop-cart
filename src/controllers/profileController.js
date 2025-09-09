@@ -42,13 +42,16 @@ export const updateProfilePic = async (req, res) => {
 
     const updatedUser = await Member.findByIdAndUpdate(
       req.user.userId,
-      { profilePic: req.file.path },
+      { profilePic: req.file.path }, // ✅ Cloudinary URL
       { new: true }
     ).select("-password");
 
     if (!updatedUser) return res.status(404).json({ message: "User not found" });
 
-    res.json({ message: "Profile picture updated successfully", user: updatedUser });
+    res.json({
+      message: "Profile picture updated successfully",
+      user: updatedUser,
+    });
   } catch (err) {
     console.error("Error updating profile picture:", err);
     res.status(500).json({ message: "Error updating profile picture" });
