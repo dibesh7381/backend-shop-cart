@@ -4,14 +4,15 @@ import Member from "../models/Member.js";
 export const getProfile = async (req, res) => {
   try {
     const member = await Member.findById(req.user.userId).select("-password");
-    if (!member) {
+    if (!member)
       return res.status(404).json({ success: false, message: "User not found" });
-    }
 
     return res.json({ success: true, user: member });
   } catch (err) {
     console.error("❌ Error fetching profile:", err);
-    return res.status(500).json({ success: false, message: "Error fetching profile", error: err.message });
+    return res
+      .status(500)
+      .json({ success: false, message: "Error fetching profile", error: err.message });
   }
 };
 
@@ -19,9 +20,8 @@ export const getProfile = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name || name.trim() === "") {
+    if (!name || name.trim() === "")
       return res.status(400).json({ success: false, message: "Name is required" });
-    }
 
     const updated = await Member.findByIdAndUpdate(
       req.user.userId,
@@ -29,33 +29,33 @@ export const updateProfile = async (req, res) => {
       { new: true }
     ).select("-password");
 
-    if (!updated) {
+    if (!updated)
       return res.status(404).json({ success: false, message: "User not found" });
-    }
 
     return res.json({ success: true, message: "Name updated successfully", user: updated });
   } catch (err) {
     console.error("❌ Error updating profile:", err);
-    return res.status(500).json({ success: false, message: "Error updating profile", error: err.message });
+    return res
+      .status(500)
+      .json({ success: false, message: "Error updating profile", error: err.message });
   }
 };
 
 // ----------------- Update Profile Picture -----------------
 export const updateProfilePic = async (req, res) => {
   try {
-    if (!req.file || !req.file.path) {
+    // Multer file key should match frontend (file or profilePic)
+    if (!req.file || !req.file.path)
       return res.status(400).json({ success: false, message: "No file uploaded" });
-    }
 
     const updatedUser = await Member.findByIdAndUpdate(
       req.user.userId,
-      { profilePic: req.file.path }, // ✅ Cloudinary URL
+      { profilePic: req.file.path },
       { new: true }
     ).select("-password");
 
-    if (!updatedUser) {
+    if (!updatedUser)
       return res.status(404).json({ success: false, message: "User not found" });
-    }
 
     return res.json({
       success: true,
@@ -64,6 +64,10 @@ export const updateProfilePic = async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Error updating profile picture:", err);
-    return res.status(500).json({ success: false, message: "Error updating profile picture", error: err.message });
+    return res.status(500).json({
+      success: false,
+      message: "Error updating profile picture",
+      error: err.message,
+    });
   }
 };
