@@ -23,16 +23,37 @@ export const updateProfile = async (req, res) => {
   }
 };
 
+// export const updateProfilePic = async (req, res) => {
+//   try {
+//     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+//     const updatedUser = await Member.findByIdAndUpdate(
+//       req.user.userId,
+//       { profilePic: req.file.path },
+//       { new: true }
+//     ).select("-password");
+//     res.json({ user: updatedUser });
+//   } catch (err) {
+//     res.status(500).json({ message: "Error updating profile picture" });
+//   }
+// };
+
+// Update profile picture
 export const updateProfilePic = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
     const updatedUser = await Member.findByIdAndUpdate(
       req.user.userId,
       { profilePic: req.file.path },
       { new: true }
     ).select("-password");
-    res.json({ user: updatedUser });
+
+    res.status(200).json({
+      message: "Profile picture updated successfully",
+      user: updatedUser,
+    });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Error updating profile picture" });
   }
 };
