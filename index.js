@@ -39,7 +39,7 @@ const productSchema = new mongoose.Schema({
   category: { type: String, required: true },
   price: { type: Number, required: true, min: 0 },
   imageUrl: { type: String, required: true },
-  imagePublicId: { type: String, required: true }, // ✅ ADD THIS
+  imagePublicId: { type: String, required: true },
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Member", required: true }
 }, { collection: "product", versionKey: false });
 
@@ -68,6 +68,8 @@ const cartSchema = new mongoose.Schema({
 }, { collection: "carts", versionKey: false });
 
 const Cart = mongoose.model("Cart", cartSchema);
+
+
 
 // ----------------- Auth Middleware -----------------
 const authMiddleware = (req, res, next) => {
@@ -338,19 +340,21 @@ app.post("/cart/remove", authMiddleware, async (req, res) => {
     if (!item) return res.status(404).json({ message: "Item not in cart" });
 
     const product = await Product.findById(productId);
-    if (product) product.quantity += item.quantity;
+    if (product) {
+      product.quantity += item.quantity;
+      await product.save();
+    }
 
     cart.items = cart.items.filter(i => i.productId.toString() !== productId);
-
-    await product.save();
     await cart.save();
 
-    res.json({ message: "Item removed", cart });
+    res.json({ message: "Item removed", items: cart.items });
   } catch (err) {
-    console.error(err);
+    console.error("Remove Item Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // Clear entire cart
 app.post("/cart/clear", authMiddleware, async (req, res) => {
