@@ -43,11 +43,8 @@ export const updateProduct = async (req, res) => {
       price: Number(price)
     };
 
-    // If new file uploaded, update imageUrl (and you may also update imagePublicId if you want)
     if (req.file) {
       updateData.imageUrl = req.file.path;
-      // OPTIONAL (recommended): updateData.imagePublicId = req.file.filename;
-      // If you don't update imagePublicId, old public_id stays and delete may remove wrong file later.
     }
 
     const updated = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -67,7 +64,6 @@ export const deleteProduct = async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
 
     if (product.imagePublicId) {
-      // destroy from Cloudinary
       await cloudinary.uploader.destroy(product.imagePublicId);
     }
 
