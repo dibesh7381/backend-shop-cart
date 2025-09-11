@@ -9,7 +9,7 @@ import {
 } from "../controllers/productController.js";
 
 import { authMiddleware, isSeller } from "../middlewares/authMiddleware.js";
-import upload from "../utils/multerConfig.js"; // <-- same upload config we defined earlier
+import upload from "../utils/multerConfig.js"; 
 
 const router = express.Router();
 
